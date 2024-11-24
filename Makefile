@@ -1,8 +1,11 @@
-CONTIKI = ../contiki-2.7
+# Path to Contiki (update if necessary)
+CONTIKI = ../contiki2.7
 
+# Specify the target platform (e.g., sky for Tmote Sky motes)
 TARGET = sky
 
-all: udp_client_retransmission
+# Define the program name based on the C file
+PROJECT = udp_client_retransmission
 
-CONTIKI_WITH_IPV6 = 1
+# Include the Contiki build system
 include $(CONTIKI)/Makefile.include
