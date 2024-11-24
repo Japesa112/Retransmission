@@ -2,6 +2,7 @@
 #include "net/netstack.h"
 #include "net/packetbuf.h"
 #include "sys/etimer.h"
+#include "sys/clock.h"
 
 PROCESS(interference_process, "Interference Generator");
 AUTOSTART_PROCESSES(&interference_process);
@@ -9,6 +10,9 @@ AUTOSTART_PROCESSES(&interference_process);
 #define MAX_RETRIES 3          // Maximum number of retransmissions
 #define RETRY_DELAY CLOCK_SECOND / 20 // Delay between retries (50ms)
 #define SUCCESS_PROBABILITY 0.7  // 70% chance of transmission success
+
+// Define RAND_MAX manually for Contiki
+#define RAND_MAX 32767  // The maximum value that random_rand() can return
 
 static struct etimer timer;
 static uint8_t retries = 0;
@@ -33,7 +37,7 @@ PROCESS_THREAD(interference_process, ev, data) {
       PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
 
       // Simulate whether the transmission was successful based on a probability
-      if (random_rand() / (RAND_MAX / 100) < SUCCESS_PROBABILITY * 100) {
+      if (random_rand() < (SUCCESS_PROBABILITY * RAND_MAX)) {
         // Transmission was successful
         printf("Transmission successful\n");
         break;  // Exit retransmission loop on success
