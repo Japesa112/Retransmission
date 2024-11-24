@@ -1,6 +1,8 @@
 CONTIKI = ../contiki-2.7
+
 TARGET = sky
 
-PROJECT_SOURCEFILES += udp_client_retransmission.c
+all: udp_client_retransmission
 
+CONTIKI_WITH_IPV6 = 1
 include $(CONTIKI)/Makefile.include
