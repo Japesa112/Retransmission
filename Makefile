@@ -1,6 +1,11 @@
-CONTIKI_PROJECT = error_handling
-all: $(CONTIKI_PROJECT)
+# Path to Contiki (update if necessary)
+CONTIKI = ../contiki2.7
+
+# Specify the target platform (e.g., sky for Tmote Sky motes)
+TARGET = sky
+
+# Define the program name based on the C file
+PROJECT = error_handling
 
 # Include the Contiki build system
-CONTIKI = ../contiki-2.7
 include $(CONTIKI)/Makefile.include
