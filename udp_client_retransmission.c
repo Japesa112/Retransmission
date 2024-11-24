@@ -1,48 +1,83 @@
 #include "contiki.h"
-#include "net/ipv6/simple-udp.h"
+#include "contiki-net.h"
 #include <stdio.h>
 #include <string.h>
 
-#define UDP_PORT 1234
-#define MAX_RETRANSMISSIONS 3
+#define SERVER_IP "fd00::1"     // Server IPv6 address
+#define CLIENT_PORT 8765        // Client port number
+#define SERVER_PORT 5678        // Server port number
+#define RETRANSMISSION_TIMEOUT (CLOCK_SECOND * 5)
 
-static struct simple_udp_connection udp_conn;
-static char payload[] = "Hello, Server!";
+static struct uip_udp_conn *client_conn;   // UDP connection
+static char payload[64];                   // Payload to send
+static int retransmission_count = 0;       // Retransmission attempts
+static int ack_received = 0;               // Flag for ACK reception
 
-PROCESS(udp_client_process, "UDP Client with Retransmission");
-AUTOSTART_PROCESSES(&udp_client_process);
+PROCESS(udp_client_retransmission_process, "UDP Client with Retransmission");
+AUTOSTART_PROCESSES(&udp_client_retransmission_process);
 
-PROCESS_THREAD(udp_client_process, ev, data)
-{
+/*---------------------------------------------------------------------------*/
+PROCESS_THREAD(udp_client_retransmission_process, ev, data) {
   static struct etimer timer;
-  static int retransmissions = 0;
-  static int ack_received = 0;
 
   PROCESS_BEGIN();
 
-  // Setup UDP connection
-  simple_udp_register(&udp_conn, UDP_PORT, NULL, UDP_PORT, NULL);
+  // Create a new UDP connection
+  uip_ip6addr_t server_ipaddr;
+  uip_ip6addr(&server_ipaddr, 0xfd00, 0, 0, 0, 0, 0, 0, 1); // fd00::1
+  client_conn = udp_new(&server_ipaddr, UIP_HTONS(SERVER_PORT), NULL);
+  if (!client_conn) {
+    printf("Failed to create UDP connection\n");
+    PROCESS_EXIT();
+  }
+  udp_bind(client_conn, UIP_HTONS(CLIENT_PORT));
+  printf("UDP client started. Sending packets to [%s]:%u\n", SERVER_IP, SERVER_PORT);
 
-  while(1) {
-    etimer_set(&timer, CLOCK_SECOND * 2);
+  // Start periodic packet sending
+  etimer_set(&timer, CLOCK_SECOND * 5);
+
+  while (1) {
+    // Wait for the timer event
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
+
+    // Create the payload
+    sprintf(payload, "Hello %d", retransmission_count);
+
+    // Reset the ACK flag
+    ack_received = 0;
+
+    // Send the payload
     printf("Sending packet: %s\n", payload);
-    simple_udp_send(&udp_conn, payload, strlen(payload));
-    
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer) || ack_received);
+    uip_udp_packet_sendto(client_conn, payload, strlen(payload), &client_conn->ripaddr, UIP_HTONS(SERVER_PORT));
 
-    if (!ack_received) {
-      retransmissions++;
-      if (retransmissions >= MAX_RETRANSMISSIONS) {
-        printf("Max retransmissions reached. Dropping packet.\n");
-        retransmissions = 0;
-      } else {
-        printf("Retransmitting...\n");
-        etimer_reset(&timer);
+    // Wait for an acknowledgment
+    etimer_set(&timer, RETRANSMISSION_TIMEOUT);
+    PROCESS_WAIT_EVENT_UNTIL(ev == tcpip_event || etimer_expired(&timer));
+
+    // Handle acknowledgment
+    if (ev == tcpip_event && uip_newdata()) {
+      char *received_data = (char *)uip_appdata;
+      received_data[uip_datalen()] = '\0'; // Null-terminate the received data
+
+      if (strcmp(received_data, "ACK") == 0) {
+        printf("ACK received for packet: %s\n", payload);
+        ack_received = 1;
+        retransmission_count = 0; // Reset retransmission count
       }
-    } else {
-      printf("ACK received!\n");
-      retransmissions = 0;
     }
+
+    // Handle retransmission
+    if (!ack_received) {
+      printf("No ACK received. Retransmitting...\n");
+      retransmission_count++;
+      if (retransmission_count >= 3) {
+        printf("Failed after 3 retransmissions. Giving up on this packet.\n");
+        retransmission_count = 0; // Reset retransmission count
+      }
+    }
+
+    // Reset the timer for the next packet
+    etimer_reset(&timer);
   }
 
   PROCESS_END();
