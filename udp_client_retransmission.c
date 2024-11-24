@@ -8,6 +8,7 @@ AUTOSTART_PROCESSES(&interference_process);
 
 #define MAX_RETRIES 3          // Maximum number of retransmissions
 #define RETRY_DELAY CLOCK_SECOND / 20 // Delay between retries (50ms)
+#define SUCCESS_PROBABILITY 0.7  // 70% chance of transmission success
 
 static struct etimer timer;
 static uint8_t retries = 0;
@@ -31,12 +32,15 @@ PROCESS_THREAD(interference_process, ev, data) {
       etimer_set(&timer, RETRY_DELAY);
       PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
 
-      // If the transmission was successful, break the retry loop
-      if (/* condition to check if transmission was successful */) {
+      // Simulate whether the transmission was successful based on a probability
+      if (random_rand() / (RAND_MAX / 100) < SUCCESS_PROBABILITY * 100) {
+        // Transmission was successful
+        printf("Transmission successful\n");
         break;  // Exit retransmission loop on success
       }
       
       retries++;  // Increment retries
+      printf("Transmission failed, retrying...\n");
     }
 
     // Reset retry counter for the next transmission
